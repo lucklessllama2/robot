@@ -1,0 +1,4 @@
+# Ignore the following
+*.d
+*.o
+pca_test
