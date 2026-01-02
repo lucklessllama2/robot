@@ -1,6 +1,8 @@
 #pragma once
 
+#include <fstream>
 #include <mutex>
+#include <string>
 
 #include <stdint.h>
 
@@ -23,7 +25,7 @@
 
  class ServoDef {
    public:
-      ServoDef(const char *name, float range, float min, float max, float g, float v, float a);
+      ServoDef(const char *name, int range, float min, float max, float v, float a);
 
    public:
       // Convert from a rotation percentage to a pulse width in ms.
@@ -31,75 +33,111 @@
 
    public:
       const char *name; // Name of this servo type.
-      float range;      // How many deg wide is this servo?
-      float msMin;      // Minimum pulse width;
-      float msMax;      // Maximum pulse width;
-      float msDelta;    // Max - Min;
-      float gamma;      // The "non-linearity" of the curve for pulse to position.
-      float vMax;       // Maximum velocity for this servo in Deg/ms
-      float aMax;       // Maximum acceleration for this servo Deg/ms^2
+      int dRange;       // How many deg wide is this servo (180.0, 270.0)?
+      float msMin;      // Absolute minimum pulse width.
+      float msMax;      // Absolute maximum pulse width;
+      float msDelta;    // Delta between min and max;
+      float vMax;       // Absolute maximum velocity for this servo in Deg/ms
+      float aMax;       // Absolute maximum acceleration for this servo Deg/ms^2
  };
 
  class Servo {
    protected:
+      mutable bool dirty;
       mutable std::mutex mu;
       std::shared_ptr<IPwm> pwm;
+      std::string name;
       const ServoDef *def;
-      const char *name;
-
+      
+      // Configuration settings for this servo.
+      float dMax;       // Degree at max position.
+      float dMid;       // Degree at mid position.
+      float dMin;       // Degree at min position.
+      float pMax;       // Percent of pulse range at max. (pulse=p*msRange + msMin)
+      float pMid;       // Percent of pulse range at mid.
+      float pMin;       // Percent of pulse range at min.
+      float dMinDelta;  // Degree range of lower range.
+      float dMaxDelta;  // Degree range of upper range.
+      float pMinDelta;  // Degree range of lower range.
+      float pMaxDelta;  // Degree range of upper range.
       bool invert;      // Invert direction.
-      bool moving;      // Set true, if target position != current.
-      float pOff;       // Set position offset (trim).
-      float pMin;       // Minimum position.
-      float pMax;       // Maximum position.
-      float pCur;       // Current position.
-      float pTrg;       // Target position.
+
+      // Motion information for this servo.
+      float msCur;      // Current Pulse Width.
+      float dCur;       // Degree Current position.
+      float dTrg;       // Degree Target position.
+      float pCur;       // Percent current.
+      float pTrg;       // Percent target.
       float vCur;       // Current velocity in Deg/ms (always positive)
       float vTrg;       // Target velocity.
       float aCur;       // Current acceleration in Deg/ms^2 (always positive)
+      bool moving;      // Set true, if target position != current.
 
    public:
-      Servo(const char *name, const ServoDef *def);
-   
+      Servo(const ServoDef &def, std::shared_ptr<IPwm> pwm);
+
+   public:
+      bool Save(int fd) const;
+      bool Load(int fd);
+
+      float SetWidthMs(float ms);
+      float SetPercentAbs(float p);
+      float SetDegreeAdj(float d);
+
+      void SetMaxParam(float deg, float pct);
+      void SetMinParam(float deg, float pct);
+      void SetMidParam(float deg, float pct);
+
    public:
       // Update current position and velocity, returning True if already at target.
-      bool Update(float t);
+      //bool Update(float t);
 
-      // Set the trim to make the current position the middle.
-      void  Zero();
+      // Change the name.
+      void SetName(const std::string& name);
 
       // Set the PWM for this servo.
       void SetPwm(std::shared_ptr<IPwm> pwm);
 
-      // Min and Max positions in Deg, (max - min) < def->range.
-      bool SetRange(float min, float max);
-
       // Set true to reverse servo rotation direction.
       void SetInvert(bool inv);
 
+
+#if 0
       // Set the target position, getting there as quickly as possible.
-      bool SetPosition(float p);
+      bool SetTarget(float d);
 
       // Set the target position, rotating at given velocity.
-      bool SetTarget(float p, float v);
+      bool SetVelocity(float d, float v);
 
       // Set movement parameters: position, velocity, and accel.
       bool SetMovement(float p, float v, float a);
+#endif
 
    public:
       bool  IsMoving() const;
+      bool  IsDirty() const;
+      float GetTarget() const;
       float GetPosition() const;
       float GetVelocity() const;
       float GetAccel() const;
+      float GetPercent() const;
+
+      float GetMinDegree() const;
+      float GetMaxDegree() const;
+      float GetMidDegree() const;
+      float GetMinPercent() const;
+      float GetMaxPercent() const;
+      float GetMidPercent() const;
  };
 
 
 //SinceCam Servos
 extern const ServoDef SC_EX2940MGX;
 extern const ServoDef SC_EX2927MGX;
+extern const ServoDef DS_3245SG;
 
-#define SERVO_DEF180(_name,_min, _max, _g, _v, _a) \
-   const ServoDef _name(# _name, 180.0, _min, _max, _g, _v, _a)
+#define SERVO_DEF180(_name,_min, _max, _v, _a) \
+   const ServoDef _name(# _name, 180, _min, _max, _v, _a)
 
-#define SERVO_DEF270(_name, _min, _max, _g, _v, _a) \
-   const ServoDef _name(# _name, 270.0, _min, _max, _g, _v, _a)
+#define SERVO_DEF270(_name, _min, _max, _v, _a) \
+   const ServoDef _name(# _name, 270, _min, _max, _v, _a)

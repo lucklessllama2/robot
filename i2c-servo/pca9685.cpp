@@ -12,6 +12,7 @@
 #include "status.h"
 
 #define PCA_CLOCK     25000000.0   // 25Mhz
+#define PCA_HERTZ     300
 #define PCA_MAX_FLOAT 4095.5
 #define PCA_MAX_INT   ((uint16_t) 4095)
 
@@ -89,7 +90,7 @@ Error Pca9685Group::Init() {
         return err;
     }
 
-    Status<float> res = this->SetHertz(200.0);
+    Status<float> res = this->SetHertz(PCA_HERTZ);
     if (!res) {
         printf("Error of: %d\n", (int) res.Err());
         return res.Err();
@@ -148,7 +149,7 @@ Status<float> Pca9685Group::SetHertz(float hertz) {
     return Status<float>(actualHz);
 }
 
-Status<uint16_t> Pca9685Group::SetChannelDutyLocked_(uint32_t chan, float percent) {
+Status<float> Pca9685Group::SetChannelDutyLocked_(uint32_t chan, float percent) {
     if (chan >= PCA9685_CHANNELS) {
         return Error::BadIndex;
     }
@@ -172,6 +173,7 @@ Status<uint16_t> Pca9685Group::SetChannelDutyLocked_(uint32_t chan, float percen
     auto err = this->i2c->WriteBlock(cmd, sizeof(cmd));
     if (err == Error::Okay) {
         this->offs[chan] = off;
+        return (off / PCA_MAX_INT);
     }
     return err;
 }

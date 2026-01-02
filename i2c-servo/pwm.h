@@ -48,3 +48,4 @@ class PwmBase : public IPwm {
 
 // A shared PWM Reference.
 typedef std::shared_ptr<IPwm> PwmRef;
+typedef StatusShared<IPwm> StatusPwmRef;

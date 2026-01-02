@@ -68,7 +68,7 @@ class Pca9685Group : public PwmGroupBase {
 
     public:
         virtual Status<float> SetHertz(float target) final;    
-        virtual StatusShared<IPwm> GetChannel(uint32_t cnt) final;
+        virtual StatusPwmRef GetChannel(uint32_t cnt) final;
         friend class Pca9685Pwm;
         friend StatusShared<IPwmGroup> NewPca9685(std::shared_ptr<I2CDev> i2c);
         friend StatusShared<IPwmGroup> NewPca9685(const char *i2cDev, uint16_t i2cAddr);

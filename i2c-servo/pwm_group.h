@@ -51,7 +51,7 @@ class IPwmGroup {
         virtual Status<float> SetHertz(float target) = 0;
     
         // Return a reference to a channel on this PwmGroup.
-        virtual PwmRef GetChannel(uint32_t cnt) = 0;
+        virtual StatusPwmRef GetChannel(uint32_t cnt) = 0;
 };
 
 
@@ -90,3 +90,4 @@ class PwmGroupBase : public IPwmGroup {
 };
 
 typedef std::shared_ptr<IPwmGroup> PwmGroupRef;
+typedef StatusShared<IPwmGroup> StatusPwmGroupRef;
