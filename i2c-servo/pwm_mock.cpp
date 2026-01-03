@@ -33,9 +33,14 @@ PwmMockGroup::PwmMockGroup() : PwmGroupBase(PWMMOCK_CHANNELS) {
 
     // Create shared pointes for all the children.
     for (int a=0; a < PWMMOCK_CHANNELS; a++) {
-        auto ptr = new PwmMockPwm(this, a);
-        this->pwms.emplace_back(std::shared_ptr<PwmMockPwm>(ptr));
+        this->pwms[a] = new PwmMockPwm(this, a);
         this->offs[a] = 0x8000;  // Use an illegal value to ensure we set it.
+    }
+}
+
+PwmMockGroup::~PwmMockGroup() {
+    for (int a=0; a < PWMMOCK_CHANNELS; a++) {
+        delete this->pwms[a];
     }
 }
 
@@ -106,20 +111,20 @@ Status<float>  PwmMockGroup::SetChannelWidthMs(uint32_t chan, float widthMs) {
     return Status<float>(res.Value() * this->widthMs);
 }
 
-StatusShared<IPwm> PwmMockGroup::GetChannel(uint32_t chan) {
+Status<IPwm*> PwmMockGroup::GetChannel(uint32_t chan) {
     if (chan >= PWMMOCK_CHANNELS) {
         return Error::BadRange;
     }
-    return StatusShared<IPwm>(this->pwms[chan]);
+    return Status<IPwm*>(this->pwms[chan]);
 }
 
-StatusShared<IPwmGroup> NewPwmMock() {
+Status<IPwmGroup*> NewPwmMock() {
     PwmMockGroup *grp = new PwmMockGroup();
     Error err = grp->Init();
     if (err != Error::Okay) {
         delete grp;
-        return StatusShared<IPwmGroup>(err);
+        return Status<IPwmGroup*>(err);
     }
-    return StatusShared<IPwmGroup>(grp);
+    return Status<IPwmGroup*>(grp);
 }
 

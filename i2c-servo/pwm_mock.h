@@ -37,11 +37,13 @@ public:
 class PwmMockGroup : public PwmGroupBase {
     private:
         std::mutex mtx;
-        std::vector<std::shared_ptr<PwmMockPwm>> pwms;
+        PwmMockPwm *pwms[PWMMOCK_CHANNELS];
         float offs[PWMMOCK_CHANNELS];
         float widthMs;
 
         PwmMockGroup();
+        ~PwmMockGroup() final;
+        
         Error Init();
         Status<float> SetChannelDutyLocked_(uint32_t channel, float duty);
         Status<float> SetChannelDuty(uint32_t channel, float duty);
@@ -49,11 +51,12 @@ class PwmMockGroup : public PwmGroupBase {
 
     public:
         virtual Status<float> SetHertz(float target) final;    
-        virtual StatusPwmRef GetChannel(uint32_t cnt) final;
+        virtual Status<IPwm*> GetChannel(uint32_t cnt) final;
+      
         friend class PwmMockPwm;
-        friend StatusShared<IPwmGroup> NewPwmMock();
+        friend Status<IPwmGroup*> NewPwmMock();
 };
 
-StatusShared<IPwmGroup> NewPwmMock();
+Status<IPwmGroup*> NewPwmMock();
 
 

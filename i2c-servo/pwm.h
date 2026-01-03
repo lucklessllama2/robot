@@ -45,7 +45,3 @@ class PwmBase : public IPwm {
             return this->channel;
         }
 };
-
-// A shared PWM Reference.
-typedef std::shared_ptr<IPwm> PwmRef;
-typedef StatusShared<IPwm> StatusPwmRef;

@@ -85,8 +85,8 @@ class I2CDev {
         // N bytes followed by Restart, Address+R, and Read of N bytes.
         Error Transact(const void *out, size_t ocnt, void *in, size_t icnt);
 
-        friend StatusShared<I2CDev> NewI2CDev(const char *i2cDev, uint16_t i2cAddr);
+        friend Status<I2CDev*> NewI2CDev(const char *i2cDev, uint16_t i2cAddr);
 };
 
 // Return a Status and I2C Device on success.
-StatusShared<I2CDev> NewI2CDev(const char *i2cDev, uint16_t i2cAddr);
+Status<I2CDev*> NewI2CDev(const char *i2cDev, uint16_t i2cAddr);

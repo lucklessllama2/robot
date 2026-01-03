@@ -64,17 +64,21 @@ Status<float> Pca9685Pwm::SetWidthMs(float widthMs) {
 }
 
 
-Pca9685Group::Pca9685Group(std::shared_ptr<I2CDev> i2c) : PwmGroupBase(PCA9685_CHANNELS) {
+Pca9685Group::Pca9685Group(I2CDev *i2c) : PwmGroupBase(PCA9685_CHANNELS) {
     this->clkAdjust = 0.96;
-    this->epsilonMs = 0.005;  // Ignore width changes < 0.005ms
+    this->epsilonMs = 0.0005;  // Ignore width changes < 0.005ms
     this->i2c = i2c;
-
 
     // Create shared pointes for all the children.
     for (int a=0; a < PCA9685_CHANNELS; a++) {
-        auto ptr = new Pca9685Pwm(this, a);
-        this->pwms.emplace_back(std::shared_ptr<Pca9685Pwm>(ptr));
+        this->pwms[a] =new Pca9685Pwm(this, a);
         this->offs[a] = 0x8000;  // Use an illegal value to ensure we set it.
+    }
+}
+
+Pca9685Group::~Pca9685Group() {
+    for (int a=0; a < PCA9685_CHANNELS; a++) {
+        delete this->pwms[a];
     }
 }
 
@@ -156,9 +160,8 @@ Status<float> Pca9685Group::SetChannelDutyLocked_(uint32_t chan, float percent) 
     if (percent < 0.0) {
         return Error::BadRange;
     }
-    uint16_t off = (percent * PCA_MAX_FLOAT) * this->clkAdjust;
-    off = std::min(PCA_MAX_INT, off);
-
+    uint16_t pre_off = (percent * PCA_MAX_FLOAT) * this->clkAdjust;
+    uint16_t off = std::min(PCA_MAX_INT, pre_off);
     if (off == this->offs[chan]) {
         return off;
     }
@@ -193,29 +196,28 @@ Status<float>  Pca9685Group::SetChannelWidthMs(uint32_t chan, float widthMs) {
     return Status<float>(res.Value() * this->widthMs);
 }
 
-StatusShared<IPwm> Pca9685Group::GetChannel(uint32_t chan) {
+Status<IPwm*> Pca9685Group::GetChannel(uint32_t chan) {
     if (chan >= PCA9685_CHANNELS) {
         return Error::BadRange;
     }
-    return StatusShared<IPwm>(this->pwms[chan]);
+    return Status<IPwm*>(this->pwms[chan]);
 }
 
-StatusShared<IPwmGroup> NewPca9685(std::shared_ptr<I2CDev> i2c) {
+Status<IPwmGroup*> NewPca9685(I2CDev *i2c) {
     Pca9685Group *grp = new Pca9685Group(i2c);
     Error err = grp->Init();
     if (err != Error::Okay) {
         delete grp;
-        return StatusShared<IPwmGroup>(err);
+        return Status<IPwmGroup*>(err);
     }
-    return StatusShared<IPwmGroup>(grp);
+    return Status<IPwmGroup*>(grp);
 }
 
 
-StatusShared<IPwmGroup> NewPca9685(const char *i2cDev, uint16_t i2cAddr) {
+Status<IPwmGroup*> NewPca9685(const char *i2cDev, uint16_t i2cAddr) {
     auto i2c = NewI2CDev(i2cDev, i2cAddr);
     if (!i2c) {
-        return StatusShared<IPwmGroup>(i2c.Err());
+        return Status<IPwmGroup*>(i2c.Err());
     }
-
-    return NewPca9685(i2c.Ptr());
+    return NewPca9685(i2c.Value());
 }

@@ -1,14 +1,19 @@
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <thread>
 
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <unistd.h>
 
+#include "config.h"
+#include "pca9685.h"
+#include "pwm_group.h"
+#include "pwm_mock.h"
 #include "servo.h"
-
-
 
 
 SERVO_DEF270(SC_EX2927MGX, 0.5, 2.5, 30.0, 60.0);
@@ -16,7 +21,7 @@ SERVO_DEF180(SC_EX2940MGX, 0.5, 2.5, 30.0, 60.0);
 SERVO_DEF270(DS_3245SG, 0.5, 2.5, 30.0, 60.0);
 
 // Delta in degree before deciding they are equal.
-#define EPSILON 0.001
+#define EPSILON_DEG 0.01
 
 ServoDef::ServoDef(const char *name, int range, float min, float max, float v, float a) {
     this->name = name;
@@ -25,10 +30,12 @@ ServoDef::ServoDef(const char *name, int range, float min, float max, float v, f
     this->msMax = max;
     this->msDelta = max - min;
     this->vMax = v / 1000.0f; // Convert from Deg/s to Deg/ms
+    this->vMin = v / 100.f;
     this->aMax = a / 1000.0f; // Convert from Deg/s to Deg/ms
+    this->aMin = a / 10.f;
 }
 
-Servo::Servo(const ServoDef &def, std::shared_ptr<IPwm> pwm) {
+Servo::Servo(const ServoDef &def, IPwm *pwm) {
     this->def = &def;
     this->pwm = pwm;
     this->invert = false;
@@ -37,9 +44,7 @@ Servo::Servo(const ServoDef &def, std::shared_ptr<IPwm> pwm) {
     this->dMin = 0.0;
     this->dMax = 180.0;
     this->dMid = 90.0;
-    this->dMaxDelta = 90.0;
-    this->dMinDelta = 90.0;
-
+ 
     // Set pulse widths based on range for this servo.
     if (def.dRange == 180) {
         this->pMin = 0.0f;
@@ -50,15 +55,28 @@ Servo::Servo(const ServoDef &def, std::shared_ptr<IPwm> pwm) {
         this->pMax = 0.84f;
         this->pMid = 0.5f;
     }
-    this->pMaxDelta = this->pMax - this->pMid;
-    this->pMinDelta = this->pMid - this->pMin;
+ 
+    // Generate deltas.
+    updateDeltas();
+
+    // By default enforce 15% movement cap to prevent servo from 
+    // breaking model.  We expect to load real caps.
+    this->capped = true;
+    this->dMinCap = this->dMid - this->dMinDelta * 0.15;
+    this->dMaxCap = this->dMax - this->dMaxDelta * 0.15;
 
     // Clear all movement data;
     this->vCur = 0.0;
     this->vTrg = 0.0;
-    this->aCur = 0.0;
+    this->moving = true;
+    SetMotion((this->dMinCap + this->dMaxCap) / 2.0, this->def->vMin, this->def->aMax);
+}
 
-    SetDegreeAdj(90.0);
+void Servo::updateDeltas() {
+    this->dMaxDelta = this->dMax - this->dMid;
+    this->pMaxDelta = this->pMax - this->pMid;
+    this->dMinDelta = this->dMid - this->dMin;
+    this->pMinDelta = this->pMid - this->pMin;
 }
 
 void Servo::SetMaxParam(float deg, float pct) {
@@ -70,8 +88,7 @@ void Servo::SetMaxParam(float deg, float pct) {
     this->dirty = true;
     this->dMax = deg;
     this->pMax = pct;
-    this->dMaxDelta = this->dMax - this->dMid;
-    this->pMaxDelta = this->pMax - this->pMid;
+    updateDeltas();
 }
 
 void Servo::SetMidParam(float deg, float pct) {
@@ -79,14 +96,11 @@ void Servo::SetMidParam(float deg, float pct) {
     assert(deg <= 185.0f);
     assert(pct >= -0.02f);
     assert(pct <= 1.02f);
+
     this->dirty = true;
     this->dMid = deg;
     this->pMid = pct;
-    this->dMaxDelta = this->dMax - this->dMid;
-    this->pMaxDelta = this->pMax - this->pMid;
-    this->dMinDelta = this->dMid - this->dMin;
-    this->pMinDelta = this->pMid - this->pMin;
-    printf("SET: %f %f\n", this->dMid, this->pMid);
+    updateDeltas();
 }
 
 void Servo::SetMinParam(float deg, float pct) {
@@ -97,70 +111,83 @@ void Servo::SetMinParam(float deg, float pct) {
     this->dirty = true;
     this->dMin = deg;
     this->pMin = pct;
-    this->dMinDelta = this->dMid - this->dMin;
-    this->pMinDelta = this->pMid - this->pMin;
+    updateDeltas();
 }
 
-#define SaveMember(x) write(fd, &x, sizeof(x))
-bool Servo::Save(int fd) const {
-    SaveMember(this->dMax);
-    SaveMember(this->dMid);
-    SaveMember(this->dMin);
-    SaveMember(this->dMinDelta);
-    SaveMember(this->dMaxDelta);
-    SaveMember(this->pMax);
-    SaveMember(this->pMid);
-    SaveMember(this->pMin);
-    SaveMember(this->pMinDelta);
-    SaveMember(this->pMaxDelta);
-    SaveMember(this->invert);
-    printf("SAVE: %f %f\n", this->dMid, this->pMid);
+void Servo::SetDegCap(float min, float max) {
+    assert(min >= 0.0f);
+    assert(max <= 180.0f);
+    this->dMinCap = min;
+    this->dMaxCap = max;
+}
+
+bool Servo::Save(FILE *f) const {
+    fprintf(f, "SRV_ID: %s\n", this->name.c_str());
+    fprintf(f, "DEGREE: %f, %f, %f\n", this->dMin, this->dMid, this->dMax);
+    fprintf(f, "PCT_ms: %f, %f, %f\n", this->pMin * 100.0, this->pMid * 100.0, this->pMax * 100.0);
+    fprintf(f, "DEGCAP: %f, %f\n", this->dMinCap, this->dMaxCap);
+    fprintf(f, "INVERT: %d\n", this->invert ? 1 : 0);
+    fprintf(f, "\n");
     this->dirty = false;
     return true;
 }
 
-#define LoadMember(x) read(fd, &x, sizeof(x))
-bool Servo::Load(int fd) {
-    LoadMember(this->dMax);
-    LoadMember(this->dMid);
-    LoadMember(this->dMin);
-    LoadMember(this->dMinDelta);
-    LoadMember(this->dMaxDelta);
-    LoadMember(this->pMax);
-    LoadMember(this->pMid);
-    LoadMember(this->pMin);
-    LoadMember(this->pMinDelta);
-    LoadMember(this->pMaxDelta);
-    LoadMember(this->invert);
-    printf("LOAD: %f %f\n", this->dMid, this->pMid);
+bool Servo::Load(FILE *f) {
+    char line[180];
+    char name[80];
+    int invert;
+    int result;
+
+    assert(fgets(line, sizeof(line), f) != nullptr);
+    result = sscanf(line, "SRV_ID: %s\n", name);
+    assert(result == 1);
+    this->name = name;
+
+    result = fscanf(f, "DEGREE: %f, %f, %f\n", &this->dMin, &this->dMid, &this->dMax);
+    assert(result == 3);
+
+    result = fscanf(f, "PCT_ms: %f, %f, %f\n", &this->pMin, &this->pMid, &this->pMax);
+    assert(result == 3);
+    this->pMin /= 100.0;
+    this->pMid /= 100.0;
+    this->pMax /= 100.0;
+
+    result = fscanf(f, "DEGCAP: %f, %f\n", &this->dMinCap, &this->dMaxCap);
+    assert(result == 2);
+
+    result = fscanf(f, "INVERT: %d\n", &invert);
+    assert(result == 1);
+
+    this->invert == (invert != 0);
     this->dirty = false;
+    updateDeltas();
+
+    SetMotion((this->dMinCap + this->dMaxCap) / 2.0, this->def->vMin, this->def->aMax);
     return true;
 }
 
-void Servo::SetPwm(std::shared_ptr<IPwm> pwm) {
-    this->pwm = pwm;
-}
-
-float Servo::SetWidthMs(float ms) {
+float Servo::setWidthMsLocked(float ms) {
     this->pwm->SetWidthMs(ms);
     this->msCur = ms;
     return ms;
 }
 
-float Servo::SetPercentAbs(float pct) {
-    this->pCur = pct;
-    this->pTrg = pct;
+float Servo::setPercentLocked(float pct) {
+    float oldMs = this->msCur;
+    float oldPct = this->pCur;
+
     float ms = this->def->msDelta * pct + this->def->msMin;
-    SetWidthMs(ms);
+    setWidthMsLocked(ms);
+    this->pCur = pct;
     return pct;
 }
 
-float Servo::SetDegreeAdj(float deg) {
+float Servo::setDegreeLocked(float deg) {
     float scale;
     float range;
     float pct;
-    deg = std::min(deg, this->dMax);
-    deg = std::max(deg, this->dMin);
+    
+    deg = CapDegree(deg);
     if (deg > this->dMid) {
         scale = (deg - this->dMid) / this->dMaxDelta;
         pct = (scale * this->pMaxDelta) + this->pMid;
@@ -168,192 +195,203 @@ float Servo::SetDegreeAdj(float deg) {
         scale = (deg - this->dMin) / this->dMinDelta;
         pct = (scale * this->pMinDelta) + this->pMin;
     }
-    SetPercentAbs(pct);
-    return pct;
+    setPercentLocked(pct);
+    return deg;
 }
 
-#if 0
-extern volatile bool debug;
-bool Servo::Update(float ms) {
-    bool doPrint = debug && (this->pwm->GetChannel() == 3) && 0;
+float Servo::SetDegreeAdj(float deg) {
     std::lock_guard<std::mutex> lock(this->mu);
-    char dir = '+';
-    float pDelta;
-    float old = this->pCur;
-    if (this->pCur == this->pTrg) {
-        this->vCur = 0.0;
-        this->aCur = 0.0;
-        if (this->moving) {
-            this->moving = false;
-            return true;
-        }
+    return setDegreeLocked(deg);
+}
+
+float Servo::SetPercentAbs(float pct) {
+    std::lock_guard<std::mutex> lock(this->mu);
+    return setPercentLocked(pct);
+}
+
+bool Servo::Update(float ms) {
+    // Only apply updates if running.
+    if (this->updating == false) {
+        return true;
+    }
+
+    std::lock_guard<std::mutex> lock(this->mu);
+
+    // If we are within epsilon of the requested rotation, then we are
+    // done moving.
+    if (std::abs(this->dTrg - this->dCur) < EPSILON_DEG) {
+        this->moving = false;
+        this->dCur = dTrg;
+        this->vCur = 0;
+        return true;
+    }
+
+    // If we haven't hit target velocity, then update it.
+    float aDelta = this->aTrg * ms;
+    if (this->vCur < this->vTrg) {
+        this->vCur = std::min(this->vCur + aDelta, this->vTrg);
+    }
+
+    // If we are before the target degree, then add velocity.
+    float dDelta = this->vCur * ms;
+    if (this->dCur < this->dTrg) {
+        this->dCur = std::min(this->dCur + dDelta, this->dTrg);
     } else {
-        // If we haven't hit target velocity, then update it.
-        float vDelta = this->aCur * ms;
-        if (this->vCur < this->vTrg) {
-            this->vCur = std::min(this->aCur + vDelta, this->vTrg);
-        } 
-
-        // Apply the current veloticy to the current position.
-        pDelta = this->vCur * ms;
-        if (this->pCur < this->pTrg) {
-            this->pCur = std::min(this->pCur + pDelta, this->pTrg);
-        } else {
-            this->pCur = std::max(this->pCur - pDelta, this->pTrg);
-            dir = '-';
-        }
+        this->dCur = std::max(this->dCur - dDelta, this->dTrg);
     }
 
-    // Calculate the new rotation percentage.
-    float range = (this->pMax - this->pMin);
-    float percent = (this->pCur - this->pMin) / range;
-
-    if (doPrint) {
-        printf("%c O=%f, T=%f, N=%f, P=%f\n", dir, old, this->pTrg, this->pCur, percent);
-    }
-    // If this servo rotation is inverted, then flip the rotation percentage.
-    if (this->invert) {
-        percent = 1.0 - percent;
-    }
-
-    float pulse = this->def->PercentToPulseMs(percent);
-    this->pwm->SetWidthMs(pulse);
+    setDegreeLocked(this->dCur);
     return false;
 }
 
-// Min and Max positions in Deg, (max - min) < def->range.
-bool Servo::SetRange(float min, float max) {
+float Servo::CapDegree(float deg) {
+    if (capped) {
+        // Cap to provided movement limits.
+        deg = std::max(this->dMinCap, deg);
+        deg = std::min(this->dMaxCap, deg);
+    } else{
+        // Cap to default movement limits.
+        deg = std::max(0.0f, deg);
+        deg = std::min(180.0f, deg);
+    }
+    return deg;
+}
+
+float Servo::CapVelocity(float v) {
+    v = std::max(this->def->vMin, v);
+    v = std::min(this->def->vMax, v);
+    return v;
+}
+
+float Servo::CapAccel(float a) {
+    a = std::max(this->def->aMin, a);
+    a = std::min(this->def->aMax, a);
+    return a;
+}
+
+float Servo::SetRotation(float deg) {
+    return SetMotion(deg, this->vTrg, this->aTrg);
+}
+
+float Servo::SetVelocity(float v) {
+    this->vTrg = CapVelocity(v);
+    return this->vTrg;
+}
+
+float Servo::SetAccel(float a) {
+    this->aTrg = CapAccel(a);
+    return this->aTrg;
+}
+
+float Servo::SetMotion(float deg, float v, float a) {
     std::lock_guard<std::mutex> lock(this->mu);
-    return true;
-}
-#endif
+    deg = CapDegree(deg);
+    v = CapVelocity(a);
+    a = CapAccel(a);
 
-// Set true to reverse servo rotation direction.
-void Servo::SetInvert(bool inv) {
-    std::lock_guard<std::mutex> lock(this->mu);
-}
+    bool needsMove = false;
+    if (this->dTrg != deg) {
+        this->dTrg = deg;
+        this->moving = true;
+    }
 
-#if 0
-bool Servo::SetTarget(float p) {
-    return this->SetMovement(p, this->def->vMax, this->def->aMax);
-}
-
-bool Servo::SetVelocity(float p, float v) {
-    return this->SetMovement(p, v, this->def->aMax);
+    this->vTrg = v;
+    this->aTrg = a;
+    this->vCur = 0.0;
+    return deg;
 }
 
-bool Servo::SetMovement(float d, float v, float a) {
-    bool modified = false;
-    std::lock_guard<std::mutex> lock(this->mu);
-    float delta = std::abs(this->pCur - p);
+Servo *servos[NUM_GROUPS][NUM_SERVOS];
 
-    // Move at least one frame, to ensure PWM is correct.
-    this->moving = true;
+static void servoLoop(void) {
+    auto previous = std::chrono::high_resolution_clock::now();
+    while(1) {
+        usleep(2000);
+        auto current = std::chrono::high_resolution_clock::now();
+        auto delta = std::chrono::duration_cast<std::chrono::microseconds>(current - previous);
+        float fdelta = (float) delta.count() / 1000.0f;
+        for (int b=0; b < NUM_GROUPS; b++) {
+            for (int a=0; a < NUM_SERVOS; a++) {
+                servos[b][a]->Update(fdelta);
+            }
+        }
+        previous = current;
+    }
+}
 
-    // If we are already there, then don't do anything.
-    if (delta < EPSILON) {
-        this->pCur = p;
+void ServosInit(void) {
+    std::vector<IPwmGroup*> groups;
+
+#ifdef x86_64
+    auto pca = NewPwmMock();
+    printf("Using MOCK PWMs\n");
+#else
+    auto pca = NewPca9685("/dev/i2c-1", 0x40);
+    printf("Using PCA9685\n");
+#endif    
+    groups.push_back(pca.Value());
+
+    for (int b=0; b < NUM_GROUPS; b++) {
+        IPwmGroup *group = groups[b];
+        for (int a=0; a < NUM_SERVOS; a++) {
+            auto pwm = group->GetChannel(a);
+            servos[b][a] = new Servo(DS_3245SG, pwm.Value());
+        }
+    }
+
+    ServosLoad();
+
+    //std::thread servo_thread(servoLoop);
+    //servo_thread.detach();
+}
+
+
+bool ServosSave(void) {
+    FILE *fd = fopen("servo.txt", "wt");
+    if (fd == nullptr) {
+        perror("Failed to create servo data.\n");
         return false;
     }
-
-    if (p < this->pMin) {
-        modified = true;
-        p = this->pMin;
+    for (int b=0; b < NUM_GROUPS; b++) {
+        for (int a=0; a < NUM_SERVOS; a++) {
+            servos[b][a]->Save(fd);
+        }
     }
-    if (p > this->pMax) {
-        modified = true;
-        p = this->pMax;
+    fclose(fd);
+    printf("Servos saved.\n");
+    return true;
+}
+
+bool ServosLoad(void) {
+    FILE *fd = fopen("servo.txt", "rt");
+    if (fd == nullptr) {
+        perror("Failed to open servo data.\n");
+        return false;
     }
-    if (v < EPSILON) {
-        modified = true;
-        v = EPSILON;
+    for (int b=0; b < NUM_GROUPS; b++) {
+        for (int a=0; a < NUM_SERVOS; a++) {
+            servos[b][a]->Load(fd);
+        }
     }
-    if (v > this->def->vMax) {
-        modified = true;
-        v = this->def->vMax;
+    fclose(fd);
+    printf("Servos loaded.\n");
+    return true;
+}
+
+void ServosDump(void) {
+    for (int b=0; b < NUM_GROUPS; b++) {
+        for (int a=0; a < NUM_SERVOS; a++) {
+            servos[b][a]->Save(stdout);
+        }
     }
-    if (a < EPSILON) {
-        modified = true;
-        a = EPSILON;
-    }
-    if (a > this->def->aMax) {
-        modified = true;
-        a = this->def->aMax;
-    }
-    // If the new direction is the same, keep velocity
-    if (((this->pCur < this->pTrg) && (this->pCur < p)) ||
-        ((this->pCur > this->pTrg) && (this->pCur > p))) {
-        this->vCur = std::min(this->vCur, v);
-    } else {
-        this->vCur = 0.0;
-    }
-
-    // Set targets position, velocity, and accel.
-    this->pTrg = p;
-    this->vTrg = v;
-    this->aCur = a;
-    return modified;
-}
-#endif
-
-
-bool  Servo::IsMoving() const {
-    std::lock_guard<std::mutex> lock(this->mu);
-    return this->moving;
 }
 
-bool  Servo::IsDirty() const {
-    std::lock_guard<std::mutex> lock(this->mu);
-    return this->dirty;
-}
+Servo *ServosGet(int group, int chan) {
+    assert(group >= 0);
+    assert(group < NUM_GROUPS);
+    assert(chan >= 0);
+    assert(chan < NUM_SERVOS);
 
-float Servo::GetTarget() const {
-    std::lock_guard<std::mutex> lock(this->mu);
-    return this->pTrg;
-}
-
-float Servo::GetPosition() const {
-    std::lock_guard<std::mutex> lock(this->mu);
-    return this->pCur;
-}
-
-float Servo::GetVelocity() const {
-    std::lock_guard<std::mutex> lock(this->mu);
-    return this->vCur;
-}
-
-float Servo::GetAccel() const {
-    std::lock_guard<std::mutex> lock(this->mu);
-    return this->aCur;
-}
-
-float Servo::GetMaxDegree() const {
-    std::lock_guard<std::mutex> lock(this->mu);
-    return this->dMax;
-}
-
-float Servo::GetMidDegree() const {
-    std::lock_guard<std::mutex> lock(this->mu);
-    return this->dMid;
-}
-
-float Servo::GetMinDegree() const {
-    std::lock_guard<std::mutex> lock(this->mu);
-    return this->dMin;
-}
-
-float Servo::GetMaxPercent() const {
-    std::lock_guard<std::mutex> lock(this->mu);
-    return this->pMax;
-}
-
-float Servo::GetMidPercent() const {
-    std::lock_guard<std::mutex> lock(this->mu);
-    return this->pMid;
-}
-
-float Servo::GetMinPercent() const {
-    std::lock_guard<std::mutex> lock(this->mu);
-    return this->pMin;
+    return servos[group][chan];
 }
 

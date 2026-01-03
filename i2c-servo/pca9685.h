@@ -54,13 +54,15 @@ public:
 
 class Pca9685Group : public PwmGroupBase {
     private:
-        std::shared_ptr<I2CDev> i2c;
+        I2CDev *i2c;
         std::mutex mtx;
-        std::vector<std::shared_ptr<Pca9685Pwm>> pwms;
+        Pca9685Pwm *pwms[PCA9685_CHANNELS];
         float offs[PCA9685_CHANNELS];
         float widthMs;
 
-        Pca9685Group(std::shared_ptr<I2CDev> i2c);
+        Pca9685Group(I2CDev *i2c);
+        ~Pca9685Group() final;
+        
         Error Init();
         Status<float> SetChannelDutyLocked_(uint32_t channel, float duty);
         Status<float> SetChannelDuty(uint32_t channel, float duty);
@@ -68,14 +70,15 @@ class Pca9685Group : public PwmGroupBase {
 
     public:
         virtual Status<float> SetHertz(float target) final;    
-        virtual StatusPwmRef GetChannel(uint32_t cnt) final;
+        virtual Status<IPwm*> GetChannel(uint32_t cnt) final;
+        
         friend class Pca9685Pwm;
-        friend StatusShared<IPwmGroup> NewPca9685(std::shared_ptr<I2CDev> i2c);
-        friend StatusShared<IPwmGroup> NewPca9685(const char *i2cDev, uint16_t i2cAddr);
+        friend Status<IPwmGroup*> NewPca9685(I2CDev *i2c);
+        friend Status<IPwmGroup*> NewPca9685(const char *i2cDev, uint16_t i2cAddr);
 };
 
 
-StatusShared<IPwmGroup> NewPca9685(std::shared_ptr<I2CDev> i2c);
-StatusShared<IPwmGroup> NewPca9685(const char *i2cDev, uint16_t i2cAddr);
+Status<IPwmGroup*> NewPca9685(I2CDev *i2c);
+Status<IPwmGroup*> NewPca9685(const char *i2cDev, uint16_t i2cAddr);
 
 

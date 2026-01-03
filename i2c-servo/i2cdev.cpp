@@ -142,7 +142,7 @@ Error I2CDev::WriteRegs(uint8_t reg, const void *data, size_t cnt) {
     return err;
 }
 
-StatusShared<I2CDev> NewI2CDev(const char *i2cDev, uint16_t i2cAddr) {
+Status<I2CDev*> NewI2CDev(const char *i2cDev, uint16_t i2cAddr) {
     if ((i2cDev == NULL) || (i2cAddr >= 128)) {
         return Error::BadArgs;
     }
@@ -152,5 +152,5 @@ StatusShared<I2CDev> NewI2CDev(const char *i2cDev, uint16_t i2cAddr) {
         return ErrorFromErrno(errno);
     }
 
-    return std::shared_ptr<I2CDev>(new I2CDev(fd, i2cAddr));
+    return new I2CDev(fd, i2cAddr);
 }
