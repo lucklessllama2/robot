@@ -51,6 +51,25 @@
  * arbitrary rotation by interpolating between min and mid pulse width
  * or by mid and max pulse width.
  * 
+ * USE_INTERPOLATION
+ * When using interpolation, two slopes are computed, one from Min to Mid 
+ * points, the other from Mid to Max points.  When X is in the lower band
+ * we use m1 and b1, when X is in the upper band, we use m2 and b2.  In
+ * this way we interpolate between 3 known good points.
+ * 
+ *   Y = m1*X + b1           if (X < 50%)
+ *   Y = m2*(X - 0.5) + b2   if (X > 50%)
+ *   Where m1 = (pMid-pMin), b1 = pMin and m2 = (pMax - pMid), b2 = pMid 
+ *   And Y = output
+ * 
+ * USE_GAMMA
+ * When using Gamma, we create a slope between the known good outer points
+ * Min and Max.   We then compute a Gamma (aka exponent) to apply to the 
+ * slope to generate a curve above or below the slope to match the mid 
+ * point.
+ * 
+ *   Y = m(X ^ Gamma) + b
+ *   Where m = (pMax - pMin) and b = pMin
  */
 
 
@@ -91,6 +110,7 @@ class Servo {
       float pMax;       // Percent of pulse range at max (pulse=p*msRange + msMin).
       float pMid;       // Percent of pulse range at mid.
       float pMin;       // Percent of pulse range at min.
+      float pGamma;     // Calculated gamma for the curve.
       bool invert;      // Invert direction.
       bool capped;      // Using min/max caps to force dTrg/dCur range.
 
@@ -120,6 +140,7 @@ class Servo {
    protected:
       // Internal helpers.
       void updateDeltas();
+      void updateGamma();
       float setDegreeLocked(float deg);
       float setPercentLocked(float p);
       float setWidthMsLocked(float ms);
@@ -219,7 +240,6 @@ class Servo {
    public:
       bool IsMoving() const   { return moving; }
       bool IsDirty() const    { return dirty;  }
-      bool IsUpdating() const { return updating; } 
 };
 
 
@@ -241,6 +261,7 @@ void ServosInit(void);
 void ServosDump(void);
 bool ServosSave(void);
 bool ServosLoad(void);
+void ServosEnableUpdating(bool en);
 
 Servo *ServosGet(int group, int channel);
 

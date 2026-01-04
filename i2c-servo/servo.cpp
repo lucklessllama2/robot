@@ -20,8 +20,10 @@ SERVO_DEF270(SC_EX2927MGX, 0.5, 2.5, 30.0, 60.0);
 SERVO_DEF180(SC_EX2940MGX, 0.5, 2.5, 30.0, 60.0);
 SERVO_DEF270(DS_3245SG, 0.5, 2.5, 30.0, 60.0);
 
-// Delta in degree before deciding they are equal.
-#define EPSILON_DEG 0.01
+#define EPSILON_DEG   0.01
+#define EPSILON_GAMMA 0.0001
+#define COUNT_GAMMA   16
+
 
 ServoDef::ServoDef(const char *name, int range, float min, float max, float v, float a) {
     this->name = name;
@@ -30,9 +32,9 @@ ServoDef::ServoDef(const char *name, int range, float min, float max, float v, f
     this->msMax = max;
     this->msDelta = max - min;
     this->vMax = v / 1000.0f; // Convert from Deg/s to Deg/ms
-    this->vMin = v / 100.f;
+    this->vMin = this->vMax / 20.f;
     this->aMax = a / 1000.0f; // Convert from Deg/s to Deg/ms
-    this->aMin = a / 10.f;
+    this->aMin = this->aMax / 10.f;
 }
 
 Servo::Servo(const ServoDef &def, IPwm *pwm) {
@@ -71,6 +73,31 @@ Servo::Servo(const ServoDef &def, IPwm *pwm) {
     this->moving = true;
     SetMotion((this->dMinCap + this->dMaxCap) / 2.0, this->def->vMin, this->def->aMax);
 }
+
+void Servo::updateGamma() {
+    float gamma = 1.0;
+    float range = this->pMax - this->pMin;
+    float adjust = 0.5;
+    float delta;
+
+    printf("Compute Gamma for %f, %f, %f\n", dMin, dMid, dMax);
+    for (int a=0; a < COUNT_GAMMA; a++) {
+        float gval = range * powf(0.5, gamma) + dMin;
+        delta = dMid - gval;
+        if (std::abs(delta) < EPSILON_GAMMA) {
+            break;
+        }
+        // If computer value is too high, pull curve down.
+        if (delta > 0.0f) {
+            gamma -= adjust;
+        } else {
+            gamma += adjust;
+        }
+        adjust /= 2.0f;
+    }
+    this->pGamma = gamma;
+}
+
 
 void Servo::updateDeltas() {
     this->dMaxDelta = this->dMax - this->dMid;
@@ -161,6 +188,7 @@ bool Servo::Load(FILE *f) {
     this->invert == (invert != 0);
     this->dirty = false;
     updateDeltas();
+    updateGamma();
 
     SetMotion((this->dMinCap + this->dMaxCap) / 2.0, this->def->vMin, this->def->aMax);
     return true;
@@ -183,11 +211,15 @@ float Servo::setPercentLocked(float pct) {
 }
 
 float Servo::setDegreeLocked(float deg) {
-    float scale;
-    float range;
     float pct;
     
     deg = CapDegree(deg);
+#ifdef USE_GAMMA
+    float dPrt = deg / 180.0f;                          // Convert degrees to percent rotation.
+    float range = this->pMax - this->pMin;              // Calulate m;
+    pct = range * pow(dPct, this->gamma) + this->pMin;  // y = m*(X^gamma) + b;
+#else // End GAMMA start INTERPOLATION
+    float scale;
     if (deg > this->dMid) {
         scale = (deg - this->dMid) / this->dMaxDelta;
         pct = (scale * this->pMaxDelta) + this->pMid;
@@ -197,6 +229,7 @@ float Servo::setDegreeLocked(float deg) {
     }
     setPercentLocked(pct);
     return deg;
+#endif // End INTERPOLATION
 }
 
 float Servo::SetDegreeAdj(float deg) {
@@ -341,8 +374,8 @@ void ServosInit(void) {
 
     ServosLoad();
 
-    //std::thread servo_thread(servoLoop);
-    //servo_thread.detach();
+    std::thread servo_thread(servoLoop);
+    servo_thread.detach();
 }
 
 
@@ -395,3 +428,10 @@ Servo *ServosGet(int group, int chan) {
     return servos[group][chan];
 }
 
+void ServosEnableUpdate(bool en) {
+    for (int b=0; b < NUM_GROUPS; b++) {
+        for (int a=0; a < NUM_SERVOS; a++) {
+            servos[b][a]->SetUpdating(en);
+        }
+    }
+}

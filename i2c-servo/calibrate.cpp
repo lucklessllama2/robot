@@ -1,3 +1,13 @@
+/*
+ * Calibration Tool
+ *
+ * The calibration tool generates the rotation to pulse width curve for
+ * the servos.
+ * 
+ * The curve is expresses as:
+ *     
+ */
+
 #include <assert.h>
 #include <fcntl.h>
 #include <stdio.h>
