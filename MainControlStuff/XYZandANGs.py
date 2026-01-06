@@ -18,6 +18,8 @@ class ANG:
         pass
     def __str__(self):
         return "Body = "+str(self.body/math.pi*180)+", Shoulder = "+str(self.shoulder/math.pi*180) +", Knee = "+str(self.knee/math.pi*180)+", ID ="+str(self.ID)
+    def checkValid(self):
+        pass
 class LEG_ANG(ANG):#body shoulder knee angle not adjusted for motor mounting angles/offsets
     def __init__(self, ID, b, s, k):
         super().__init__(ID, b, s, k)
@@ -26,7 +28,7 @@ class LEG_ANG(ANG):#body shoulder knee angle not adjusted for motor mounting ang
     def toMotorANG(self) -> MOTOR_ANG:
         b = self.body
         s = self.shoulder
-        k = self.knee- math.pi/4
+        k = math.pi-(self.knee)-math.pi/4
         if self.ID == 1: #FL
             pass
         elif self.ID==2: #FR
@@ -42,7 +44,6 @@ class LEG_ANG(ANG):#body shoulder knee angle not adjusted for motor mounting ang
             raise Exception("ID is invalid ID = "+str(self.ID))
         b += math.pi/2
         s += math.pi/2
-        k += math.pi/2
         return MOTOR_ANG(self.ID,b,s,k)
     def toLEG_XYZ(self) -> Leg_XYZ:
         b = bodyData["legs"]["thighLength"]
@@ -69,7 +70,14 @@ class MOTOR_ANG(ANG):
         return self.toLEG_ANG().toLEG_XYZ()
     def toBody_XYZ(self)->Body_XYZ:
         return self.toLEG_ANG().toBody_XYZ()
-
+    def checkValid(self):
+        if self.ID == 1:
+            if self.shoulder < 0 or self.shoulder > math.pi:
+                print('\033[93m'"shoulder angle out of range 0 to 180 degrees, angle = " + str(self.shoulder/math.pi*180,'\033[96m'))
+            if self.knee < 0 or self.knee > math.pi:
+                print('\033[93m'"knee angle out of range 0 to 180 degrees, angle = " + str(self.knee/math.pi*180),'\033[96m')
+            if self.body < 0 or self.body > math.pi:
+                print('\033[93m'"body angle out of range 0 to 180 degrees, angle = " + str(self.body/math.pi*180),'\033[96m')
 class XYZ:
     def __init__(self, x,y,z):
         self.x=x
@@ -121,13 +129,13 @@ class Leg_XYZ(XYZ):
             z = self.z
             # calculate total distance
             length = math.sqrt(x * x + y * y + z * z)
-            a = math.asin(y / length)
+            a = math.asin(z / length)
             a2 = math.acos(bodyData["legs"]["BTS"]["y"] / length)
-            bAng = a2 - a  # angle of body motor
+            bAng = a2 - a - math.pi/2  # angle of body motor
             length2 = math.sqrt(length * length - bodyData["legs"]["BTS"]["y"] * bodyData["legs"]["BTS"]["y"])
-            kAng = math.acos((t * t + c * c - length2 * length2) / (2 * t * c))
-            sAng = math.atanh(x * x / (y * y + z * z))
-            #return
+            kAng = math.pi-math.acos((t * t + c * c - length2 * length2) / (2 * t * c))
+            sAng = math.acos((t*t+length2*length2-c*c)/(2*t*length2)) - math.asin(x/length2)
+
             return LEG_ANG(ID, bAng,sAng,kAng)
     def toMotorANG(self, ID=-1) -> MOTOR_ANG:
         return self.toLEG_ANG(ID).toMotorANG()
@@ -139,13 +147,13 @@ class Body_XYZ(XYZ):
     def toLegXYZ(self,ID = -1) ->Leg_XYZ:
         if ID == -1:
             raise Exception("ID ==-1 when change Body XYZ to LEG_XYZ")
-        if ID == 0:  # FL leg
+        if ID == 1:  # FL leg
             return Leg_XYZ(ID,self.x - bodyData["body"]["length"] / 2, self.y, self.z + bodyData["body"]["width"] / 2)
-        elif ID == 1:  # FR leg
+        elif ID == 2:  # FR leg
             return Leg_XYZ(ID,self.x - bodyData["body"]["length"] / 2, self.y, self.z - bodyData["body"]["width"] / 2)
-        elif ID == 2:  # BL leg
+        elif ID == 3:  # BL leg
             return Leg_XYZ(ID,self.x + bodyData["body"]["length"] / 2, self.y, self.z + bodyData["body"]["width"] / 2)
-        elif ID == 3:  # BR leg
+        elif ID == 4:  # BR leg
             return Leg_XYZ(ID,self.x + bodyData["body"]["length"] / 2, self.y, self.z - bodyData["body"]["width"] / 2)
         else:
             raise Exception("invaled value for ID: ID="+str(ID))

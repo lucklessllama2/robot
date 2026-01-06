@@ -50,10 +50,11 @@ int do_leg(char *tokens[], int count) {
         return RANGE;
     }
 
-    ServosGet(0, leg + 0)->SetRotation(shl);
-    ServosGet(0, leg + 4)->SetRotation(upr);
-    ServosGet(0, leg + 8)->SetRotation(lwr);
-    printf("LEG %d %f %f %f\n", leg+1, shl, upr, lwr);
+    ServosGet(0, leg + 0)->SetDegreeAdj(shl);
+    ServosGet(0, leg + 4)->SetDegreeAdj(upr);
+    ServosGet(0, leg + 8)->SetDegreeAdj(lwr);
+    if (leg == 0)
+	printf("LEG %d %f %f %f\n", leg+1, shl, upr, lwr);
     return OKAY;
 }
 
@@ -172,9 +173,9 @@ int main(int argc, char *args[]) {
         for (int a=0; a < NUM_SERVOS; a++) {
             Servo *servo = ServosGet(0, a);
             servo->SetCapped(false);
-            servo->SetVelocity(0.0);
-            servo->SetAccel(100.0);
-            servo->SetUpdating(true);
+            servo->SetVelocity(10);
+            servo->SetAccel(1000.0);
+            servo->SetUpdating(false);
         }
     }
 

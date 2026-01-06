@@ -29,7 +29,8 @@ class Action:
         self.timeOffset = 0
         self.defaultState = []
         self.state:State = s
-        self.lastTime = True
+        self.DeltaTime = 0
+        self.lastTime = 0
         self.running = False
     def start(self, timeOffSet):
         self.timeOffset = timeOffSet
@@ -37,10 +38,12 @@ class Action:
         self.lastTime = time.time()
         self.update()
     def update(self):
+        self.DeltaTime = time.time() - self.lastTime
         if self.running:
             self._update()
         else:
             print("running = False")
+        self.lastTime = time.time()
     def _update(self):
         pass
 
@@ -49,7 +52,7 @@ class inBetween(Action):
         super().__init__(s)
         self.next:Action = Next
         self.startPos:[Leg_XYZ,Leg_XYZ,Leg_XYZ,Leg_XYZ] = self.state.body.getLegPos()
-        endPos = self.next.defaultState
+        endPos = self.next.getDefaultPose()
         self.d0 = XYZ(self.startPos[0].x - endPos[0].x, self.startPos[0].y - endPos[0].y, self.startPos[0].z - endPos[0].z)
         self.d1 = XYZ(self.startPos[1].x - endPos[1].x, self.startPos[1].y - endPos[1].y, self.startPos[1].z - endPos[1].z)
         self.d2 = XYZ(self.startPos[2].x - endPos[2].x, self.startPos[2].y - endPos[2].y, self.startPos[2].z - endPos[2].z)
@@ -58,8 +61,9 @@ class inBetween(Action):
         m = max(l)
         self.timeLeft = m/self.state.Speed
         self.timeMax = self.timeLeft
+        
     def _update(self):
-        timeDelta = time.time()
+        timeDelta = time.time() - self.lastTime
         self.timeLeft -= timeDelta
         if self.timeLeft <= 0:
             self.next.start(timeOffSet = self.timeLeft)
@@ -74,8 +78,8 @@ class Walking(Action):
         self.timeLeft = 1
         self.startTime = 1
         self.minATime = 4
-        self.stepL = 30 #mm
-        self.stepH = 20 #mm
+        self.stepL = 100 #mm
+        self.stepH = 50 #mm
         self.d:[float,float] =[1,0]
         self.done = True
         super().__init__(s)
@@ -89,6 +93,7 @@ class Walking(Action):
     def updateA(self):#update to next part of animation
         self.done=False
         self.i += 1
+        print("i:",self.i,"_____________________________________________")
         if self.i>=4:
             self.i = 0
         cs = self.state.controllerState
@@ -101,14 +106,15 @@ class Walking(Action):
                 self.state.currentAction = inBetween(self.state,Standing(self.state))
                 self.state.currentAction.start(self.timeOffset)
             else:
-                self.d=jx/t, jy/t
-                self.startTime = (2-t) * self.minATime
-                self.timeLeft = self.startTime
+                pass
+                #self.d=jx/t, jy/t
+                #print("d:",self.d)
+                #self.startTime = (2-t) * self.minATime
+        self.timeLeft = self.startTime
 
     #updates motors to new position between animation segments
     def updateB(self):
-        timeDelta = time.time()
-        self.timeLeft -= timeDelta
+        self.timeLeft -= self.DeltaTime
         if self.timeLeft <= 0:
             self.timeOffset = self.timeLeft
             self.timeLeft = 0
@@ -131,6 +137,8 @@ class Walking(Action):
         FR = Leg_XYZ(2, o2[0] * self.d[0], self.state.bodyHeight - o2[1], o2[0] * self.d[1])
         BL = Leg_XYZ(3, o1[0] * self.d[0], self.state.bodyHeight - o1[1], o1[0] * self.d[1])
         BR = Leg_XYZ(4, o2[0] * self.d[0], self.state.bodyHeight - o2[1], o2[0] * self.d[1])
+        print("FL:",FL.toMotorANG())
+        self.state.body.setLegPos(FL,FR,BR,BL)
     def getDefaultPose(self) -> [Leg_XYZ,Leg_XYZ,Leg_XYZ,Leg_XYZ]:
         o1 = self.eq1()
         o2 = self.eq3()
@@ -142,20 +150,20 @@ class Walking(Action):
     def st(self)->float:
         return self.timeLeft/self.startTime
     def eq1(self)->[float,float]:
+        x = -(self.st()-1) * self.stepL/2
         y = -math.pow(self.st()-1,2)*self.stepH+self.stepH
-        x = -(self.st()-1)*self.stepL/2
         return x,y
     def eq2(self)->[float,float]:
-        y = -math.pow(self.st(),2)*self.stepH+self.stepH
-        x = -self.st()*self.stepL/2
+        x = self.st() * self.stepL/2
+        y = 0
         return x,y
     def eq3(self)->[float,float]:
+        x = (self.st()-1) *self.stepL/2
         y = 0
-        x =(self.st()-1)*self.stepL/2
         return x,y
     def eq4(self)->[float,float]:
-        y = 0
-        x =self.st()*self.stepL/2
+        y = -math.pow(self.st(),2)*self.stepH+self.stepH
+        x = -self.st() * self.stepL/2
         return x,y
 class Standing(Action):
     def __init__(self, s):
@@ -172,10 +180,10 @@ class Standing(Action):
         jy = cs["RightJoystickY"]
         t = math.sqrt(jx * jx + jy * jy)
         if t > 0.35:
+            print("swiching to walking")
             self.running = False
-            self.state.currentAction=inBetween(self.state,Walking(self.state))
+            self.state.currentAction = inBetween(self.state,Walking(self.state))
             self.state.currentAction.start(0)
-        else:
             FL,FR,BR,BL = self.getDefaultPose()
             self.state.body.setLegPos(FL,FR,BR,BL)
 
@@ -216,11 +224,12 @@ class Leg:
         self.pos = xyz.toLegXYZ(self.ID)
         self.GoToANG(xyz.toLEG_ANG(self.ID))
     def GoToANG(self,ang:LEG_ANG):
-        self.pos = ang.toLEG_XYZ()
+        #self.pos = ang.toLEG_XYZ()
         ang2 = ang.toMotorANG()
+        ang2.checkValid()
         cmd = "LEG,"+str(self.ID)+","+str(ang2.body/math.pi*180)+","+str(ang2.shoulder/math.pi*180)+","+str(ang2.knee/math.pi*180)
         print(cmd)
-        #mc.sendCMD()
+        mc.sendCMD(cmd)
 
 class MC:
     def __init__(self):
@@ -229,6 +238,7 @@ class MC:
         self.addr=(self.IP,self.PORT)
         self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     def sendCMD(self,message):
+        pass
         self.s.sendto(message.encode(), self.addr)
 
 mc = MC()
