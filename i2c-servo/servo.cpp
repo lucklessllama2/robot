@@ -68,6 +68,7 @@ Servo::Servo(const ServoDef &def, IPwm *pwm) {
     this->dMaxCap = this->dMax - this->dMaxDelta * 0.15;
 
     // Clear all movement data;
+    this->dCur = 89.0;
     this->vCur = 0.0;
     this->vTrg = 0.0;
     this->moving = true;
@@ -144,8 +145,12 @@ void Servo::SetMinParam(float deg, float pct) {
 void Servo::SetDegCap(float min, float max) {
     assert(min >= 0.0f);
     assert(max <= 180.0f);
-    this->dMinCap = min;
-    this->dMaxCap = max;
+    assert(min < max);
+    if (min != this->dMinCap || max != this->dMaxCap) {
+        this->dMinCap = min;
+        this->dMaxCap = max;
+        this->dirty = true;
+    }
 }
 
 bool Servo::Save(FILE *f) const {
@@ -212,7 +217,13 @@ float Servo::setPercentLocked(float pct) {
 
 float Servo::setDegreeLocked(float deg) {
     float pct;
+
     
+    if (this->debug) {
+        this->dCur != deg;
+        printf("%s changing %f to %f.\n", this->name.c_str(), this->dCur, deg);
+    }
+
     deg = CapDegree(deg);
 #ifdef USE_GAMMA
     float dPrt = deg / 180.0f;                          // Convert degrees to percent rotation.

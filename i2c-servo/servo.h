@@ -133,6 +133,7 @@ class Servo {
       float pTrg;       // Percent target pulse width.
       bool moving;      // Set true, if target position != current.
       bool updating;    // Set true to enable background updates.
+      bool debug;
 
    public:
       Servo(const ServoDef &def, IPwm *pwm);
@@ -190,6 +191,10 @@ class Servo {
       // Set the PWM for this servo.
       IPwm *GetPWM() const { return pwm; }
       void SetPwm(IPwm *p) { pwm = p; }
+
+      // Set true to Debug on SetDegree update.
+      bool GetDebug() const     { return debug; }
+      void SetDebug(bool i)     { debug = i; }
 
       // Set true to INVERT degree and PWM relationship (change rotation direction).
       bool GetInvert() const     { return invert; }

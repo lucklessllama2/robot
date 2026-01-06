@@ -20,7 +20,7 @@ $(BUILD)/%.o : %.cpp
 
 .PHONY: clean transfer
 clean:
-	rm -rf servo_test calibrate limit $(BUILD)
+	rm -rf animate calibrate limit server test $(BUILD)
 
 transfer: clean
 	rsync -avzP . dogo@192.168.1.221:~/i2c-servo	
@@ -58,16 +58,37 @@ limit : $(COMMON_OBJ) $(BUILD)/limit.o
 lrun: limit
 	./$<
 
-ldebug: calibrate
+ldebug: limit
 	gdb ./$< -x .gdbinit
 
 
-.PHONY: srun sdebug
-servo_test : $(COMMON_OBJ) $(BUILD)/servo_test.o
+.PHONY: arun adebug
+animate : $(COMMON_OBJ) $(BUILD)/animate.o
 	$(CXX) $^ -o $@ -g $(LDFLAGS)
 
-srun: servo_test
+arun: animate
 	./$<
 
-sdebug: servo_test
+adebug: animate
 	gdb ./$< -x .gdbinit
+
+.PHONY: srun sdebug
+server : $(COMMON_OBJ) $(BUILD)/server.o
+	$(CXX) $^ -o $@ -g $(LDFLAGS)
+
+srun: server
+	./$<
+
+sdebug: server
+	gdb ./$< -x .gdbinit
+
+.PHONY: trun tdebug
+test : $(COMMON_OBJ) $(BUILD)/servo_test.o
+	$(CXX) $^ -o $@ -g $(LDFLAGS)
+
+trun: test
+	./$<
+
+tdebug: test
+	gdb ./$< -x .gdbinit
+
