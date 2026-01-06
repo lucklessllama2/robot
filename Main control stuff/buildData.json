@@ -1,0 +1,17 @@
+{
+  "body": {
+    "width": 146.30,
+    "length": 260
+  },
+  "legs": {
+    "BTS": {
+      "z": 33.93,
+      "y": 9.90,
+      "x": 0
+    },
+    "thighLength": 150,
+    "calfLength": 135,
+    "footRadius": 15,
+    "FTSZ" : 4.9
+  }
+}
