@@ -6,7 +6,7 @@ CPPFLAGS ?= -g -O0 -D$(ARCH)=1
 COMMON_SRC := i2cdev.cpp pca9685.cpp pwm_mock.cpp servo.cpp state.cpp status.cpp
 COMMON_OBJ := $(patsubst %.cpp,$(BUILD)/%.o,$(COMMON_SRC))
 
-all: calibrate limit servo_test
+all: animate calibrate limit server test
 
 info:
 	echo "ARCH=$(ARCH)"

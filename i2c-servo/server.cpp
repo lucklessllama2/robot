@@ -53,6 +53,7 @@ int do_leg(char *tokens[], int count) {
     ServosGet(0, leg + 0)->SetRotation(shl);
     ServosGet(0, leg + 4)->SetRotation(upr);
     ServosGet(0, leg + 8)->SetRotation(lwr);
+    return OKAY;
 }
 
 int do_move(char *tokens[], int count) {
