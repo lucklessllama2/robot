@@ -224,7 +224,7 @@ class Leg:
 
 class MC:
     def __init__(self):
-        self.PORT = 1234
+        self.PORT = 4000
         self.IP = "127.0.0.1"
         self.addr=(self.IP,self.PORT)
         self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)

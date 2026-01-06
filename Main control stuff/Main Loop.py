@@ -22,4 +22,3 @@ if __name__ == '__main__':
         rs.ControllerUpdate(udpServer.cState)
         rs.update()
         time.sleep(0.05)
-
