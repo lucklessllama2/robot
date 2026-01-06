@@ -15,7 +15,7 @@ class State:
         self.imuOn:bool = False
         self.currentAction:Action = Standing(self)
         self.Speed:float = 50
-        self.bodyHeight:float = 150
+        self.bodyHeight:float = 200
 
         self.controllerState = None
 

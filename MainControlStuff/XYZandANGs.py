@@ -78,6 +78,7 @@ class MOTOR_ANG(ANG):
                 print('\033[93m'"knee angle out of range 0 to 180 degrees, angle = " + str(self.knee/math.pi*180),'\033[96m')
             if self.body < 0 or self.body > math.pi:
                 print('\033[93m'"body angle out of range 0 to 180 degrees, angle = " + str(self.body/math.pi*180),'\033[96m')
+
 class XYZ:
     def __init__(self, x,y,z):
         self.x=x

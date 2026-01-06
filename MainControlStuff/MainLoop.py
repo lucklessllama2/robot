@@ -9,6 +9,8 @@ import RobotState
 rs = RobotState.State()
 
 
+def startUP():
+    udpServer.runUDPServer()
 def startUpStuff():
     udpServer.runUDPServer()
 def waitForController():
@@ -22,31 +24,8 @@ if __name__ == '__main__':
     rs.currentAction.start(0)
     print("starting actions")
     while True:
-        if False:
             rs.ControllerUpdate(udpServer.cState)
             rs.update()
-            t = time.time()+0.10
+            t = time.time()+0.01
             while t>time.time():
                 pass
-        else:
-            if False:
-                d = 180
-                l = 0
-                h = 180
-                r = (h-l)/d
-                for i in range(d):
-                    dg = r*i+l
-                    print("dg:",dg)
-                    j  = dg/180*math.pi
-                    rs.body.getLeg(1).GoToANG(za.MOTOR_ANG(1,math.pi/2,math.pi/2,j))
-                    time.sleep(2/d)
-                for i in range(d):
-                    dg=r*(d-i)+l
-                    print("dg:",dg)
-                    j/180*math.pi
-                    rs.body.getLeg(1).GoToANG(za.MOTOR_ANG(1,math.pi/2,math.pi/2,j))
-                    time.sleep(2/d)
-            else:
-                dg = 0
-                j = dg/180*math.pi
-                rs.body.getLeg(1).GoToANG(za.MOTOR_ANG(1,math.pi/2,math.pi/2,j))

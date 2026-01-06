@@ -13,5 +13,13 @@
     "calfLength": 135,
     "footRadius": 15,
     "FTSZ" : 4.9
+  },
+  "servos":
+  {
+    "limits":
+    {
+      "min": 0,
+      "max": 250
+    }
   }
 }
