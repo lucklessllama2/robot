@@ -53,6 +53,7 @@ int do_leg(char *tokens[], int count) {
     ServosGet(0, leg + 0)->SetRotation(shl);
     ServosGet(0, leg + 4)->SetRotation(upr);
     ServosGet(0, leg + 8)->SetRotation(lwr);
+    printf("LEG %d %f %f %f\n", leg+1, shl, upr, lwr);
     return OKAY;
 }
 
@@ -109,6 +110,8 @@ void process_packet(char *buf, size_t len, sockaddr_in *addr) {
         char *lf = strchr(start, '\n');
         if (lf != NULL) {
             lf[0] = 0;
+        } else {
+            lf = end;
         }
         lcount++;
 
@@ -198,9 +201,11 @@ int main(int argc, char *args[]) {
     printf("   QUIT:  remote quit command\n");
 
     char rx[1024*32];
+    socklen_t alen = sizeof(addr);
     while(1) {
-        ssize_t len = recvfrom(sock, rx, sizeof(rx), 0, (sockaddr *) &addr, NULL);
+        ssize_t len = recvfrom(sock, rx, sizeof(rx), 0, (sockaddr *) &addr, &alen);
         if (len < 0) {
+            perror("failed recvfrom.");
             return -1;
         }
 
