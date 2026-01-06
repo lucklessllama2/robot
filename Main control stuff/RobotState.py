@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import socket
 import time
 from datetime import timedelta
 
@@ -12,9 +13,9 @@ class State:
     def __init__(self):
         self.on:bool = False
         self.imuOn:bool = False
-        self.currentAction:Action = Action(self)
+        self.currentAction:Action = Standing(self)
         self.Speed:float = 50
-        self.bodyHeight:float = 100
+        self.bodyHeight:float = 150
 
         self.controllerState = None
 
@@ -38,6 +39,8 @@ class Action:
     def update(self):
         if self.running:
             self._update()
+        else:
+            print("running = False")
     def _update(self):
         pass
 
@@ -214,8 +217,18 @@ class Leg:
         self.GoToANG(xyz.toLEG_ANG(self.ID))
     def GoToANG(self,ang:LEG_ANG):
         self.pos = ang.toLEG_XYZ()
-        pass
+        ang2 = ang.toMotorANG()
+        cmd = "LEG,"+str(self.ID)+","+str(ang2.body/math.pi*180)+","+str(ang2.shoulder/math.pi*180)+","+str(ang2.knee/math.pi*180)
+        print(cmd)
+        #mc.sendCMD()
 
-if __name__ == '__main__':
-    a = Body_XYZ(10,10,5)
-    b = a.toLegXYZ(1)
+class MC:
+    def __init__(self):
+        self.PORT = 4000
+        self.IP = "127.0.0.1"
+        self.addr=(self.IP,self.PORT)
+        self.s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    def sendCMD(self,message):
+        self.s.sendto(message.encode(), self.addr)
+
+mc = MC()

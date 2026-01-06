@@ -26,6 +26,7 @@ def sendControllerUpdate():
     addr = (IP, PORT)
     #print(json.dumps(joy.__dict__.copy()))
     message ="con_update"+ json.dumps(joy.__dict__)
+    print(message)
     clientSocket.sendto(message.encode(), addr)
 class XboxController:
     MAX_TRIG_VAL = math.pow(2, 8)

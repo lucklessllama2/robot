@@ -4,6 +4,7 @@ import time
 
 PORT = 8005
 IP = "127.0.0.1"
+
 try: # load the json with the server data and update vars
     with open('Sever/SeverData.json') as jFile:
         jData = json.load(jFile)
