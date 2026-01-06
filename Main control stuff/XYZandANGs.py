@@ -26,20 +26,23 @@ class LEG_ANG(ANG):#body shoulder knee angle not adjusted for motor mounting ang
     def toMotorANG(self) -> MOTOR_ANG:
         b = self.body
         s = self.shoulder
-        k = self.knee
-        if self.ID==0: #FL
+        k = self.knee- math.pi/4
+        if self.ID == 1: #FL
             pass
-        elif self.ID==1: #FR
+        elif self.ID==2: #FR
             k=-k
             s = -s
-        elif self.ID == 2: #BL
+        elif self.ID == 3: #BL
             b=-b
-        elif self.ID == 3: #BR
+        elif self.ID == 4: #BR
             b=-b
             k=-k
             s=-s
         else:
             raise Exception("ID is invalid ID = "+str(self.ID))
+        b += math.pi/2
+        s += math.pi/2
+        k += math.pi/2
         return MOTOR_ANG(self.ID,b,s,k)
     def toLEG_XYZ(self) -> Leg_XYZ:
         b = bodyData["legs"]["thighLength"]
@@ -89,13 +92,13 @@ class Leg_XYZ(XYZ):
         self.leg_id = ID
         super().__init__(x, y, z)
     def toBody_XYZ(self) -> Body_XYZ:
-        if self.leg_id ==0:  #FL leg
+        if self.leg_id ==1:  #FL leg
             return Body_XYZ(self.x + bodyData["body"]["length"] / 2, self.y, self.z - bodyData["body"]["width"] / 2)
-        elif self.leg_id == 1:  #FR leg
+        elif self.leg_id == 2:  #FR leg
             return Body_XYZ(self.x + bodyData["body"]["length"] / 2, self.y, self.z + bodyData["body"]["width"] / 2)
-        elif self.leg_id == 2:  #BL leg
+        elif self.leg_id == 3:  #BL leg
             return Body_XYZ(self.x - bodyData["body"]["length"] / 2, self.y, self.z - bodyData["body"]["width"] / 2)
-        elif self.leg_id == 3:  # BR leg
+        elif self.leg_id == 4:  # BR leg
             return Body_XYZ(self.x - bodyData["body"]["length"] / 2, self.y, self.z + bodyData["body"]["width"] / 2)
     def toLegXYZ(self, ID=-1) -> Leg_XYZ:
         if ID == -1:
