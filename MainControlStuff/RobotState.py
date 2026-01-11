@@ -77,7 +77,7 @@ class Walking(Action):
         self.startTime = 0.3
         self.minATime = 4
         self.stepL = 100 #mm
-        self.stepH = 50 #mm
+        self.stepH = 10 #mm
         self.d:{float,float} = [1,0]
         self.done = True
         super().__init__(s)
@@ -133,12 +133,12 @@ class Walking(Action):
         elif self.i == 3:
             o1 = self.eq4()
             o2 = self.eq2()
-        FL = Leg_XYZ(1, o1[0] * self.d[0], self.state.bodyHeight - o1[1], o1[0] * self.d[1])
-        FR = Leg_XYZ(2, o2[0] * self.d[0], self.state.bodyHeight - o2[1], o2[0] * self.d[1])
-        BL = Leg_XYZ(3, o1[0] * self.d[0], self.state.bodyHeight - o1[1], o1[0] * self.d[1])
-        BR = Leg_XYZ(4, o2[0] * self.d[0], self.state.bodyHeight - o2[1], o2[0] * self.d[1])
+        FL = Leg_XYZ(1, o1[0] * self.d[0]+10, self.state.bodyHeight - o1[1]-20, o1[0] * self.d[1])
+        FR = Leg_XYZ(2, o2[0] * self.d[0]+10, self.state.bodyHeight - o2[1]-20, o2[0] * self.d[1])
+        BL = Leg_XYZ(3, o2[0] * self.d[0]+10, self.state.bodyHeight - o2[1]+20, o2[0] * self.d[1])
+        BR = Leg_XYZ(4, o1[0] * self.d[0]+10, self.state.bodyHeight - o1[1]+20, o1[0] * self.d[1])
         print("FR:",FR.toMotorANG())
-        self.state.body.setLegPos(FL,FR,BR,BL)
+        self.state.body.setLegPos(FL,FR,BL,BR)
     def getDefaultPose(self) -> {Leg_XYZ,Leg_XYZ,Leg_XYZ,Leg_XYZ}:
         o1 = self.eq1()
         o2 = self.eq3()
@@ -170,23 +170,24 @@ class Standing(Action):
     def __init__(self, s):
         super().__init__(s)
     def getDefaultPose(self) -> {Leg_XYZ, Leg_XYZ, Leg_XYZ, Leg_XYZ}:
-        FL = Leg_XYZ(1,0, self.state.bodyHeight,0)
-        FR = Leg_XYZ(2,0, self.state.bodyHeight,0)
-        BL = Leg_XYZ(3,0, self.state.bodyHeight,0)
-        BR = Leg_XYZ(4,0, self.state.bodyHeight,0)
+        FL = Leg_XYZ(1,10, self.state.bodyHeight-30,0)
+        FR = Leg_XYZ(2,10, self.state.bodyHeight-30,0)
+        BL = Leg_XYZ(3,10, self.state.bodyHeight,0)
+        BR = Leg_XYZ(4,10, self.state.bodyHeight,0)
         return FL, FR, BL, BR
     def _update(self):
         cs = self.state.controllerState
         jx = cs["RightJoystickX"]
         jy = cs["RightJoystickY"]
         t = math.sqrt(jx * jx + jy * jy)
+        self.state.body.setLegPos(*self.getDefaultPose())
         if t > 0.35:
             print("swiching to walking")
             self.running = False
             self.state.currentAction = inBetween(self.state,Walking(self.state))
             self.state.currentAction.start(0)
-            FL,FR,BR,BL = self.getDefaultPose()
-            self.state.body.setLegPos(FL,FR,BR,BL)
+            FL,FR,BL,BR = self.getDefaultPose()
+            self.state.body.setLegPos(FL,FR,BL,BR)
     def start(self, timeOffSet):
         print("state = Standing")
         self.state.body.TurnON()

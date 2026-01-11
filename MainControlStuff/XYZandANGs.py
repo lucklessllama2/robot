@@ -37,11 +37,10 @@ class LEG_ANG(ANG):#body shoulder knee angle not adjusted for motor mounting ang
             s = - s
             b = - b
         elif self.ID == 3: #BL
-            b+= math.pi/4
-            b= - b
+            pass
         elif self.ID == 4: #BR
-            b+= math.pi/4
-            k =-k+math.pi
+            b=-b
+            k = -k+math.pi
             s=-s
         else:
             raise Exception("ID is invalid ID = "+str(self.ID))
