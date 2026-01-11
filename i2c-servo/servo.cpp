@@ -200,7 +200,10 @@ bool Servo::Load(FILE *f) {
 }
 
 float Servo::setWidthMsLocked(float ms) {
-    this->pwm->SetWidthMs(ms);
+    if (this->on)
+        this->pwm->SetWidthMs(ms);
+    else
+        this->pwm->SetWidthMs(0.0);
     this->msCur = ms;
     return ms;
 }
@@ -242,7 +245,18 @@ float Servo::setDegreeLocked(float deg) {
     return deg;
 #endif // End INTERPOLATION
 }
-
+bool Servo::SetOn(bool power) {
+    std::lock_guard<std::mutex> lock(this->mu);
+    this->on = power;
+    if (!power) {
+        // Turn off the servo PWM.
+        this->pwm->SetWidthMs(0.0);
+    } else {
+        // Restore current position.
+        setDegreeLocked(this->dCur);
+    }
+    return this->on;
+}
 float Servo::SetDegreeAdj(float deg) {
     std::lock_guard<std::mutex> lock(this->mu);
     return setDegreeLocked(deg);

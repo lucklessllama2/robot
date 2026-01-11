@@ -131,6 +131,7 @@ class Servo {
       float aTrg;       // Current acceleration in Deg/ms^2 (always positive)
 
       float pTrg;       // Percent target pulse width.
+      bool on;          // Servo powered on/off.
       bool moving;      // Set true, if target position != current.
       bool updating;    // Set true to enable background updates.
       bool debug;
@@ -163,6 +164,8 @@ class Servo {
       float GetPercentAbs() const   { return pCur; }
 
       float SetDegreeAdj(float d);
+
+      bool SetOn(bool power);
 
    public:
       // Configuration tuning Parameters
@@ -241,7 +244,6 @@ class Servo {
          a = aTrg;
          return moving;
       }
-
    public:
       bool IsMoving() const   { return moving; }
       bool IsDirty() const    { return dirty;  }

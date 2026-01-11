@@ -26,19 +26,22 @@ class LEG_ANG(ANG):#body shoulder knee angle not adjusted for motor mounting ang
     def toLEG_ANG(self) -> LEG_ANG:
         return self
     def toMotorANG(self) -> MOTOR_ANG:
+        print(self)
         b = self.body
         s = self.shoulder
         k = math.pi-(self.knee)-math.pi/4
         if self.ID == 1: #FL
             pass
         elif self.ID==2: #FR
-            k=-k
-            s = -s
+            k = -k + math.pi
+            s = - s
+            b = - b
         elif self.ID == 3: #BL
-            b=-b
+            b+= math.pi/4
+            b= - b
         elif self.ID == 4: #BR
-            b=-b
-            k=-k
+            b+= math.pi/4
+            k =-k+math.pi
             s=-s
         else:
             raise Exception("ID is invalid ID = "+str(self.ID))
@@ -116,6 +119,15 @@ class Leg_XYZ(XYZ):
             return self
         else:
             return self.toBody_XYZ().toLegXYZ(ID)
+    def doInverts(self,x , y, z,):
+        if self.leg_id == 1: #FL
+            return x,y,z
+        elif self.leg_id==2: #FR
+            return x,y,-z
+        elif self.leg_id == 3: #BL
+            return x,y,z
+        elif self.leg_id == 4: #BR
+            return x,y,-z
     def toLEG_ANG(self, ID=-1) -> LEG_ANG:
         if ID == -1:
             ID = self.leg_id
@@ -128,11 +140,12 @@ class Leg_XYZ(XYZ):
             x = self.x
             y = self.y
             z = self.z
+            x,y,z = self.doInverts(x,y,z)
             # calculate total distance
             length = math.sqrt(x * x + y * y + z * z)
             a = math.asin(z / length)
             a2 = math.acos(bodyData["legs"]["BTS"]["y"] / length)
-            bAng = a2 - a - math.pi/2  # angle of body motor
+            bAng = a2 - a - math.pi/2# angle of body motor
             length2 = math.sqrt(length * length - bodyData["legs"]["BTS"]["y"] * bodyData["legs"]["BTS"]["y"])
             kAng = math.pi-math.acos((t * t + c * c - length2 * length2) / (2 * t * c))
             sAng = math.acos((t*t+length2*length2-c*c)/(2*t*length2)) - math.asin(x/length2)

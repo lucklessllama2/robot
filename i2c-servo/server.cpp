@@ -80,6 +80,23 @@ int do_move(char *tokens[], int count) {
     return OKAY;
 }
 
+int do_pwr(char *tokens[], int count) {
+    int srv = atoi(tokens[0]);
+    int on = atoi(tokens[1]);
+    if ((srv < 1) || (srv > 12)) {
+        for (int a = 0; a < 12; a++) {
+            Servo *servo = ServosGet(0, a);
+            servo->SetOn(on);
+        }
+    }
+    else{
+        Servo *servo = ServosGet(0, srv - 1);
+        servo->SetOn(on);
+    }
+    printf("PWR %d\n", on);
+    return OKAY;
+}
+
 int process_line(char *tokens[], int count) {
     char *cmd = tokens[0];
     tokens++;
@@ -90,6 +107,9 @@ int process_line(char *tokens[], int count) {
     }
     if (!strcmp(cmd, "MOV")) {
         return do_move(tokens, count);
+    }
+    if (!strcmp(cmd, "PWR")) {
+        return do_pwr(tokens, count);
     }
     if (!strcmp(cmd, "QUIT")) {
         return do_quit(tokens, count);
@@ -176,6 +196,7 @@ int main(int argc, char *args[]) {
             servo->SetVelocity(10);
             servo->SetAccel(1000.0);
             servo->SetUpdating(false);
+            servo->SetOn(true);
         }
     }
 

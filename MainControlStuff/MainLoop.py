@@ -24,8 +24,16 @@ if __name__ == '__main__':
     rs.currentAction.start(0)
     print("starting actions")
     while True:
+        if True:
             rs.ControllerUpdate(udpServer.cState)
             rs.update()
             t = time.time()+0.01
             while t>time.time():
                 pass
+        else:
+            rs.body.setLegPos(
+                za.Leg_XYZ(1,0,150,0),
+                za.Leg_XYZ(2,0,150,0),
+                za.Leg_XYZ(3,0,150,0),
+                za.Leg_XYZ(4,0,150,0)
+            )
