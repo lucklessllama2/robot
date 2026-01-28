@@ -4,28 +4,29 @@ sys.path.append("/home/dogo/robot")
 import time
 import math
 import os
-from Server.UDP_Controller import udpServer
+from StateSystem.State import State
+st = State()
+from Server.BlueServer import BLUETOOTH_Server
 import RobotState
 rs = RobotState.State()
 
-
-def startUP():
-    udpServer.runUDPServer()
 def startUpStuff():
-    udpServer.runUDPServer()
+    BLU = BLUETOOTH_Server(st)
+    BLU.runServer()
 def waitForController():
     print("waiting for controller")
-    while udpServer.getControllerData() is None:
-        time.sleep(0.1)
+    #while udpServer.getControllerData() is None:
+     #   time.sleep(0.1)
+
 if __name__ == '__main__':
     startUpStuff()
     waitForController()
-    rs.ControllerUpdate(udpServer.cState)
+    rs.ControllerUpdate(st.controller)
     rs.currentAction.start(0)
     print("starting actions")
     while True:
         if True:
-            rs.ControllerUpdate(udpServer.cState)
+            rs.ControllerUpdate(st.controller)
             rs.update()
             t = time.time()+0.01
             while t>time.time():
